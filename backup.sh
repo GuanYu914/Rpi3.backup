@@ -1,8 +1,11 @@
 #!/bin/bash
 
+# 18/08/29 note: add mpack command to send a backup mail attached log file.
+
 # ======================== CHANGE THESE VALUES ========================
-function stopServices {
-	echo -e "${purple}${bold}Stopping services before backup${NC}${normal}" | tee -a $DIR/backup.log
+function stopServices 
+{
+	echo -e "Stopping services before backup" | tee -a $DIR/backup.log
     	sudo service cron stop
     	sudo service ssh stop
     	sudo service apache2 stop
@@ -10,8 +13,9 @@ function stopServices {
     	sudo service nmbd stop
 }
 
-function startServices {
-	echo -e "${purple}${bold}Starting the stopped services${NC}${normal}" | tee -a $DIR/backup.log
+function startServices 
+{
+	echo -e "Starting the stopped services$" | tee -a $DIR/backup.log
 	sudo service cron start
 	sudo service ssh start
 	sudo service apache2 start
@@ -27,6 +31,9 @@ RETENTIONPERIOD=0 		# don't keep old backup file
 POSTPROCESS=1 			# 1 to use a postProcessSucess function after successfull backup
 GZIP=0 				# whether to gzip the backup or not
 
+# Setting for mail
+MAILRECEIVER=aa774281@gmail.com
+
 # Function which tries to mount MOUNTPOINT
 function mountMountPoint 
 {
@@ -37,7 +44,7 @@ function mountMountPoint
 
 function postProcessSucess {
 	# Update Packages and Kernel
-	echo -e "${yellow}Update Packages and Kernel${NC}${normal}" | tee -a $DIR/backup.log
+	echo -e "Update Packages and Kernel" | tee -a $DIR/backup.log
     	sudo apt-get update
     	sudo apt-get upgrade -y
     	sudo apt-get autoclean
@@ -65,13 +72,13 @@ normal=`tput sgr0`
 
 # Check if mount point is mounted, if not quit!
 if ! mountpoint -q "$MOUNTPOINT" ; then
-    echo -e "${yellow}${bold}Destination is not mounted; attempting to mount ... ${NC}${normal}"
+    echo -e "Destination is not mounted; attempting to mount ..."
     mountMountPoint
     if ! mountpoint -q "$MOUNTPOINT" ; then
-        echo -e "${red}${bold} Unable to mount $MOUNTPOINT; Aborting! ${NC}${normal}"
+        echo -e "Unable to mount $MOUNTPOINT; Aborting!"
         exit 1
     fi
-    echo -e "${green}${bold}Mounted $MOUNTPOINT; Continuing backup${NC}${normal}"
+    echo -e "Mounted $MOUNTPOINT; Continuing backup"
 fi
 
 
@@ -81,10 +88,10 @@ fi
 if [ ! -d "$DIR" ];
    then
       mkdir $DIR
-	  echo -e "${yellow}${bold}Backup directory $DIR didn't exist, I created it${NC}${normal}"  | tee -a $DIR/backup.log
+	  echo -e "Backup directory $DIR didn't exist, I created it"  | tee -a $DIR/backup.log
 fi
 
-echo -e "${green}${bold}Starting RaspberryPI backup process!${NC}${normal}" | tee -a $DIR/backup.log
+echo -e "Starting RaspberryPI backup process!" | tee -a $DIR/backup.log
 echo "____ BACKUP ON $(date +%Y/%m/%d_%H:%M:%S)" | tee -a $DIR/backup.log
 echo ""
 # First check if pv package is installed, if not, install it first
@@ -92,11 +99,11 @@ PACKAGESTATUS=`dpkg -s pv | grep Status`;
 
 if [[ $PACKAGESTATUS == S* ]]
    then
-      echo -e "${cyan}${bold}Package 'pv' is installed${NC}${normal}" | tee -a $DIR/backup.log
+      echo -e "Package 'pv' is installed" | tee -a $DIR/backup.log
       echo ""
    else
-      echo -e "${yellow}${bold}Package 'pv' is NOT installed${NC}${normal}" | tee -a $DIR/backup.log
-      echo -e "${yellow}${bold}Installing package 'pv' + 'pv dialog'. Please wait...${NC}${normal}" | tee -a $DIR/backup.log
+      echo -e "Package 'pv' is NOT installed" | tee -a $DIR/backup.log
+      echo -e "Installing package 'pv' + 'pv dialog'. Please wait..." | tee -a $DIR/backup.log
       echo ""
       sudo apt-get -y install pv && sudo apt-get -y install pv dialog
 fi
@@ -116,13 +123,13 @@ sync; sync
 stopServices
 
 # Begin the backup process, should take about 45 minutes hour from 8Gb SD card to HDD
-echo -e "${green}${bold}Backing up SD card to img file on HDD${NC}${normal}" | tee -a $DIR/backup.log
+echo -e "Backing up SD card to img file on HDD" | tee -a $DIR/backup.log
 SDSIZE=`sudo blockdev --getsize64 /dev/mmcblk0`;
 if [ $GZIP = 1 ];
 	then
 		echo -e "${green}Gzipping backup${NC}${normal}"
 		OFILE=$OFILE.gz # append gz at file
-        sudo pv -tpreb /dev/mmcblk0 -s $SDSIZE | dd  bs=1M conv=sync,noerror iflag=fullblock | gzip > $OFILE
+        	sudo pv -tpreb /dev/mmcblk0 -s $SDSIZE | dd  bs=1M conv=sync,noerror iflag=fullblock | gzip > $OFILE
 	else
 		echo -e "${green}No backup compression${NC}${normal}"
 		sudo pv -tpreb /dev/mmcblk0 -s $SDSIZE | dd of=$OFILE bs=1M conv=sync,noerror iflag=fullblock
@@ -137,22 +144,25 @@ startServices
 # If command has completed successfully, delete previous backups and exit
 if [ $BACKUP_SUCCESS =  0 ];
 then
-      echo -e "${green}${bold}RaspberryPI backup process completed! FILE: $OFILE${NC}${normal}" | tee -a $DIR/backup.log
-      echo -e "${yellow}Removing backups older than $RETENTIONPERIOD days${NC}" | tee -a $DIR/backup.log
-      sudo find $DIR -maxdepth 1 -name "*.img" -o -name "*.gz" -mtime +$RETENTIONPERIOD -exec rm {} \;
-      echo -e "${cyan}If any backups older than $RETENTIONPERIOD days were found, they were deleted${NC}" | tee -a $DIR/backup.log
-      echo "Hello I'm pi, ur backup data is copied to usb flash device." | mail -s Backup aa774281@gmail.com 
- 	  if [ $POSTPROCESS = 1 ] ;
-	  then
-			postProcessSucess
-	  fi
-	  exit 0
+      	echo -e "RaspberryPI backup process completed! FILE: $OFILE" | tee -a $DIR/backup.log
+      	echo -e "Removing backups older than $RETENTIONPERIOD days" | tee -a $DIR/backup.log
+      	sudo find $DIR -maxdepth 1 -name "*.img" -o -name "*.gz" -mtime +$RETENTIONPERIOD -exec rm {} \;
+	echo -e "If any backups older than $RETENTIONPERIOD days were found, they were deleted" | tee -a $DIR/backup.log
+      	#echo "Hello I'm pi, ur backup data is copied to usb flash device." | mail -s Backup $MAILRECEIVER
+	mpack -s BackupIsSuccessfully. -d /home/mermaid/cronjobs/backup-message.txt /media/usb-drive/pi-backup/backup.log $MAILRECEIVER
+	
+	if [ $POSTPROCESS = 1 ] ;
+	then
+		postProcessSucess
+	fi
+	exit 0
 else 
-    # Else remove attempted backup file
-     echo -e "${red}${bold}Backup failed!${NC}${normal}" | tee -a $DIR/backup.log
-     sudo rm -f $OFILE
-     echo -e "${purple}Last backups on HDD:${NC}" | tee -a $DIR/backup.log
-     sudo find $DIR -maxdepth 1 -name "*.img" -exec ls {} \;
-     echo "Hello I'm pi, ur backup data is failed, please check all configs in backup process." | mail -s Backup aa774281@gmail.com
-     exit 1
+     # Else remove attempted backup file
+     	echo -e "Backup failed!" | tee -a $DIR/backup.log
+     	sudo rm -f $OFILE
+     	echo -e "Last backups on HDD:" | tee -a $DIR/backup.log
+     	sudo find $DIR -maxdepth 1 -name "*.img" -exec ls {} \;
+     	#echo "Hello I'm pi, ur backup data is failed, please check all configs in backup process." | mail -s Backup aa774281@gmail.com
+	mpack -s BackupIsUnsuccessfully. -d /home/mermaid/cronjobs/backup-message.txt /media/usb-drive/pi-backup/backup.log $MAILRECEIVER
+     	exit 1
 fi
